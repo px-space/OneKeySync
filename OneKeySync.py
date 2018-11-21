@@ -1,6 +1,7 @@
 ﻿# -*- coding: utf-8 -*-
 '''
-版本：beta
+OneKeySync
+python3练习
 
 处理规则：
 1、源存在，目标不存在 -- 复制到目标
