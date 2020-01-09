@@ -26,6 +26,7 @@ sync.config.json:
 '''
 import json
 import os
+import re
 import shutil
 import sys
 
@@ -39,18 +40,28 @@ class SyncStuct:
     type_rmdir = 'rmdir'
     type_cpfile = 'cpfile'
     type_cpdir = 'cpdir'
+    type_check = 'check'
 
     showName = {
         'rmfile': '删除文件',
         'rmdir': '删除目录',
         'cpfile': '复制文件',
         'cpdir': '复制目录',
+        'check': '检查文件',
     }
     dealFunc = {
         'rmfile': lambda src, dst: os.remove(src),
         'rmdir': lambda src, dst: shutil.rmtree(src),
         'cpfile': shutil.copy2,
         'cpdir': shutil.copytree,
+        'check': lambda src, dst: '',
+    }
+    showFunc = {
+        'rmfile': lambda src, dst: src,
+        'rmdir': lambda src, dst: src,
+        'cpfile': lambda src, dst: src + '\t --> \t'+dst,
+        'cpfile': lambda src, dst: src + '\t --> \t'+dst,
+        'check': lambda src, dst: src + '\t --> \t'+dst,
     }
 
     def __init__(self, syncType, syncSrc, syncDes):
@@ -60,9 +71,10 @@ class SyncStuct:
 
     def deal(self):
         dealFunc[self.SyncType](self.SyncSource, self.SyncTarget)
+        # print(self.show())
 
     def show(self):
-        return ("%s: %s\t-->  %s\n" % (self.showName[self.SyncType], self.SyncSource, self.SyncTarget))
+        return ("%s: %s" % (self.showName[self.SyncType], self.showFunc[self.SyncType](self.SyncSource, self.SyncTarget)))
 
 
 class SyncMethod:
@@ -93,10 +105,10 @@ class SyncMethod:
 
         source_folder = []
         target_folder = []
-        conf = loadConfig()
+        conf = SyncMethod.loadConfig()
 
         # 同步方向，即SyncFolder的方向
-        sync_direction_default = bool(conf['reverse'])
+        sync_direction_reverse = bool(conf['reverse'])
         bindingPath_Windows = dict(conf['win_define'])
         bindingPath_Linux = dict(conf['linux_define'])
         SyncFolder = list(conf['folder'])
@@ -107,9 +119,9 @@ class SyncMethod:
         else:
             binding = bindingPath_Linux
 
-        for item in SyncFolder:
-            tmp = re.split("%:", item)
-            if sync_direction_default:
+        for it in SyncFolder:
+            tmp = it.replace(':', '').split('%')
+            if not sync_direction_reverse:
                 source_folder.append(binding[tmp[1]] + tmp[2])
                 target_folder.append(binding[tmp[3]] + tmp[4])
             else:
@@ -172,10 +184,10 @@ class SyncMethod:
         for file in targetList:
             # 遍历目标目录下的所有文件，如果源目录不存在，则删除
 
-            from_file = os.path.join(src, file)
-            to_file = os.path.join(dst, file)
+            if file not in sourceList:
+                from_file = os.path.join(src, file)
+                to_file = os.path.join(dst, file)
 
-            if not os.path.exists(from_file):
                 if os.path.isdir(to_file):
                     # 删除目录
                     SyncInfo.append(
@@ -193,13 +205,16 @@ class SyncMethod:
 
             if (os.path.isdir(from_file)):
                 # 如果是文件夹，递归
-                syncdir(from_file, to_file)
+                SyncInfo += SyncMethod.syncdir(from_file, to_file)
             else:
-                r = needCopy(from_file, to_file)
+                r = SyncMethod.needCopy(from_file, to_file)
                 if r == True:
                     # 复制文件
                     SyncInfo.append(
                         SyncStuct(SyncStuct.type_cpfile, from_file, to_file))
+                elif r == None:
+                    SyncInfo.append(
+                        SyncStuct(SyncStuct.type_check, from_file, to_file))
 
         return SyncInfo
 
@@ -217,7 +232,8 @@ class SyncMethod:
                 print("文件夹 %s 不存在" % target_folder[i])
                 continue
             print('正在分析 %s\t-- %s' % (source_folder[i], target_folder[i]))
-            result += syncdir(source_folder[i], target_folder[i])  # 这里是同步的入口
+            # 这里是同步的入口
+            result += SyncMethod.syncdir(source_folder[i], target_folder[i])
 
         return result
 
@@ -227,16 +243,14 @@ class SyncMethod:
         count = len(action)
         i = 1
         for it in action:
-            it = SyncStuct(it)
-
             try:
                 it.deal()
             except Exception as e:
                 print(e)
 
-            i = i+1
             if i % 5 == 0:
                 print("已完成 %5d\t/ %5d" % (i, count))
+            i = i+1
 
         return
 
@@ -260,7 +274,7 @@ def main():
     print('分析已完成，即将做如下修改：')
     with open(log_file, 'w', encoding='utf-8') as f:
         for it in action:
-            f.write(SyncStuct(it).show())
+            f.write(it.show()+'\n')
 
     if os.name == "nt":
         os.system("notepad "+log_file)
