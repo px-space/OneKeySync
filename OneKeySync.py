@@ -70,7 +70,7 @@ class SyncStuct:
         self.SyncTarget = syncDes
 
     def deal(self):
-        dealFunc[self.SyncType](self.SyncSource, self.SyncTarget)
+        self.dealFunc[self.SyncType](self.SyncSource, self.SyncTarget)
         # print(self.show())
 
     def show(self):
