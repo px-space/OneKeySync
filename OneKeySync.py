@@ -34,35 +34,35 @@ default_config_path = 'sync.config.json'
 log_file = 'log.txt'
 
 
-class SyncStuct:
+class SyncStruct:
     ''' SyncType - - 0：删除文件 1：删除目录 2：复制文件 3：复制目录 '''
-    type_rmfile = 'rmfile'
-    type_rmdir = 'rmdir'
-    type_cpfile = 'cpfile'
-    type_cpdir = 'cpdir'
-    type_check = 'check'
+    type_rmfile = 0
+    type_rmdir = 1
+    type_cpfile = 2
+    type_cpdir = 3
+    type_check = 4
 
-    showName = {
-        'rmfile': '删除文件',
-        'rmdir': '删除目录',
-        'cpfile': '复制文件',
-        'cpdir': '复制目录',
-        'check': '检查文件',
-    }
-    dealFunc = {
-        'rmfile': lambda src, dst: os.remove(src),
-        'rmdir': lambda src, dst: shutil.rmtree(src),
-        'cpfile': shutil.copy2,
-        'cpdir': shutil.copytree,
-        'check': lambda src, dst: '',
-    }
-    showFunc = {
-        'rmfile': lambda src, dst: src,
-        'rmdir': lambda src, dst: src,
-        'cpfile': lambda src, dst: src + '\t --> \t'+dst,
-        'cpfile': lambda src, dst: src + '\t --> \t'+dst,
-        'check': lambda src, dst: src + '\t --> \t'+dst,
-    }
+    showName = [
+        '删除文件',
+        '删除目录',
+        '复制文件',
+        '复制目录',
+        '检查文件',
+    ]
+    dealFunc = [
+        lambda src, dst: os.remove(src),
+        lambda src, dst: shutil.rmtree(src),
+        shutil.copy2,
+        shutil.copytree,
+        lambda src, dst: SyncStruct.showFunc[SyncStruct.type_check](src, dst),
+    ]
+    showFunc = [
+        lambda src, dst: src,
+        lambda src, dst: src,
+        lambda src, dst: src + '\t --> \t'+dst,
+        lambda src, dst: src + '\t --> \t'+dst,
+        lambda src, dst: src + '\t <=> \t'+dst,
+    ]
 
     def __init__(self, syncType, syncSrc, syncDes):
         self.SyncType = syncType
@@ -166,17 +166,17 @@ class SyncMethod:
             # 目标文件夹不存在，复制整个目录
 
             # 复制目录
-            SyncInfo.append(SyncStuct(3, src, dst))
-            return
+            SyncInfo.append(SyncStruct(SyncStruct.type_cpdir, src, dst))
+            return SyncInfo
 
         if not os.path.isdir(dst):
             # 目标为文件，删除，复制目录
 
             # 删除文件
-            SyncInfo.append(SyncStuct(SyncStuct.type_rmfile, dst, ""))
+            SyncInfo.append(SyncStruct(SyncStruct.type_rmfile, dst, ""))
             # 复制目录
-            SyncInfo.append(SyncStuct(SyncStuct.type_cpdir, src, dst))
-            return
+            SyncInfo.append(SyncStruct(SyncStruct.type_cpdir, src, dst))
+            return SyncInfo
 
         sourceList = os.listdir(src)
         targetList = os.listdir(dst)
@@ -191,11 +191,11 @@ class SyncMethod:
                 if os.path.isdir(to_file):
                     # 删除目录
                     SyncInfo.append(
-                        SyncStuct(SyncStuct.type_rmdir, to_file, ""))
+                        SyncStruct(SyncStruct.type_rmdir, to_file, ""))
                 else:
                     # 删除文件
                     SyncInfo.append(
-                        SyncStuct(SyncStuct.type_rmfile, to_file, ""))
+                        SyncStruct(SyncStruct.type_rmfile, to_file, ""))
 
         for file in sourceList:
             # 遍历源文件夹下的所有文件（包括文件夹）。用os.path.walk，或许会更方便些，那样递归都省去了。
@@ -211,10 +211,10 @@ class SyncMethod:
                 if r == True:
                     # 复制文件
                     SyncInfo.append(
-                        SyncStuct(SyncStuct.type_cpfile, from_file, to_file))
+                        SyncStruct(SyncStruct.type_cpfile, from_file, to_file))
                 elif r == None:
                     SyncInfo.append(
-                        SyncStuct(SyncStuct.type_check, from_file, to_file))
+                        SyncStruct(SyncStruct.type_check, from_file, to_file))
 
         return SyncInfo
 
@@ -236,6 +236,18 @@ class SyncMethod:
             result += SyncMethod.syncdir(source_folder[i], target_folder[i])
 
         return result
+
+    @staticmethod
+    def write(action):
+        with open(log_file, 'w', encoding='utf-8') as f:
+            arr = []
+            for it in action:
+                if it.SyncType != SyncStruct.type_check:
+                    f.write(it.show()+'\n')
+                else:
+                    arr.append(it)
+            for it in arr:
+                f.write(it.show()+'\n')
 
     @staticmethod
     def doSync(action):
@@ -272,9 +284,7 @@ def main():
         return
 
     print('分析已完成，即将做如下修改：')
-    with open(log_file, 'w', encoding='utf-8') as f:
-        for it in action:
-            f.write(it.show()+'\n')
+    SyncMethod.write(action)
 
     if os.name == "nt":
         os.system("notepad "+log_file)
