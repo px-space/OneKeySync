@@ -29,9 +29,22 @@ import os
 import re
 import shutil
 import sys
+import stat
 
 default_config_path = 'sync.config.json'
 log_file = 'log.txt'
+
+
+def remove_files(e, fn, src, dst):
+    if isinstance(e, Exception):
+        os.chmod(e.filename, stat.FILE_ATTRIBUTE_NORMAL)
+    try:
+        fn(src, dst)
+    except Exception as ex:
+        if isinstance(e, Exception) and e.filename == ex.filename:
+            return
+        print('fix: '+ex)
+        remove_files(ex, fn, src, dst)
 
 
 class SyncStruct:
@@ -70,8 +83,8 @@ class SyncStruct:
         self.SyncTarget = syncDes
 
     def deal(self):
-        self.dealFunc[self.SyncType](self.SyncSource, self.SyncTarget)
-        # print(self.show())
+        remove_files("", self.dealFunc[self.SyncType],
+                     self.SyncSource, self.SyncTarget)
 
     def show(self):
         return ("%s: %s" % (self.showName[self.SyncType], self.showFunc[self.SyncType](self.SyncSource, self.SyncTarget)))
@@ -255,10 +268,7 @@ class SyncMethod:
         count = len(action)
         i = 1
         for it in action:
-            try:
-                it.deal()
-            except Exception as e:
-                print(e)
+            it.deal()
 
             if i % 5 == 0:
                 print("已完成 %5d\t/ %5d" % (i, count))
