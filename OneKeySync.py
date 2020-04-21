@@ -43,7 +43,7 @@ def remove_files(e, fn, src, dst):
     except Exception as ex:
         if isinstance(e, Exception) and e.filename == ex.filename:
             return
-        print('fix: '+ex)
+        print(ex)
         remove_files(ex, fn, src, dst)
 
 
